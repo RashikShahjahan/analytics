@@ -16,8 +16,9 @@ type EventRequest struct {
 
 type EventFilter struct {
 	EventBase
-	FromTime string `json:"from,omitempty"`
-	ToTime   string `json:"to,omitempty"`
+	FromTime     string `json:"from,omitempty"`
+	ToTime       string `json:"to,omitempty"`
+	UserLocation string `json:"user_location,omitempty"`
 }
 
 type EventRecord struct {
