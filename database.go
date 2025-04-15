@@ -22,16 +22,16 @@ var (
 var db *sql.DB
 
 func InitDB() error {
-	host := getEnv("DB_HOST", defaultHost)
-	portStr := getEnv("DB_PORT", strconv.Itoa(defaultPort))
+	host := getEnv("PGHOST", defaultHost)
+	portStr := getEnv("PGPORT", strconv.Itoa(defaultPort))
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		log.Printf("Invalid DB_PORT value, using default: %d", defaultPort)
+		log.Printf("Invalid PGPORT value, using default: %d", defaultPort)
 		port = defaultPort
 	}
-	user := getEnv("DB_USER", defaultUser)
-	password := getEnv("DB_PASSWORD", defaultPassword)
-	dbname := getEnv("DB_NAME", defaultDBName)
+	user := getEnv("PGUSER", defaultUser)
+	password := getEnv("PGPASSWORD", defaultPassword)
+	dbname := getEnv("POSTGRES_DB", defaultDBName)
 
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
