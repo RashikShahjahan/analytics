@@ -17,8 +17,8 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/analytics", getEvents).Methods("GET")
-	r.HandleFunc("/analytics", recordEvent).Methods("POST")
+	r.HandleFunc("/api", getEvents).Methods("GET")
+	r.HandleFunc("/api", recordEvent).Methods("POST")
 
 	fmt.Println("Analytics server is running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", r))

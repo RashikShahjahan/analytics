@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Visualizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-top: 0;
+            font-weight: 600;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+        }
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #4a5568;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #3182ce;
+        }
+        .charts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .chart-container {
+            background-color: white;
+            border-radius: 6px;
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+        .data-table th {
+            background-color: #edf2f7;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        .data-table td {
+            padding: 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+        .data-table tr:hover {
+            background-color: #f8fafc;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #718096;
+        }
+        .error {
+            color: #e53e3e;
+            padding: 10px;
+            background-color: #fff5f5;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        @media (max-width: 768px) {
+            .charts {
+                grid-template-columns: 1fr;
+            }
+            .filter-group {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Analytics Visualizer</h1>
+        <div class="error" id="error-message"></div>
+        
+        <div class="filters">
+            <div class="filter-group">
+                <label for="service">Service</label>
+                <input type="text" id="service" placeholder="All services">
+            </div>
+            <div class="filter-group">
+                <label for="event">Event Type</label>
+                <input type="text" id="event" placeholder="All events">
+            </div>
+            <div class="filter-group">
+                <label for="path">Path</label>
+                <input type="text" id="path" placeholder="All paths">
+            </div>
+            <div class="filter-group">
+                <label for="from-date">From Date</label>
+                <input type="datetime-local" id="from-date">
+            </div>
+            <div class="filter-group">
+                <label for="to-date">To Date</label>
+                <input type="datetime-local" id="to-date">
+            </div>
+            <div class="filter-group" style="display: flex; align-items: flex-end;">
+                <button id="apply-filters">Apply Filters</button>
+            </div>
+        </div>
+        
+        <div class="loading" id="loading-indicator">Loading data...</div>
+        
+        <div class="charts">
+            <div class="chart-container">
+                <h2>Events Over Time</h2>
+                <canvas id="events-over-time"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2>Events by Path</h2>
+                <canvas id="events-by-path"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2>Events by Device</h2>
+                <canvas id="events-by-device"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2>Events by Browser</h2>
+                <canvas id="events-by-browser"></canvas>
+            </div>
+        </div>
+        
+        <h2>Raw Event Data</h2>
+        <table class="data-table" id="events-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Service</th>
+                    <th>Event</th>
+                    <th>Path</th>
+                    <th>Device</th>
+                    <th>Browser</th>
+                    <th>Location</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const API_BASE_URL = 'https://analytics.rashik.sh';
+            
+            const charts = {
+                eventsOverTime: null,
+                eventsByPath: null,
+                eventsByDevice: null,
+                eventsByBrowser: null
+            };
+            
+            // Set default date range (last 7 days)
+            const toDate = new Date();
+            const fromDate = new Date();
+            fromDate.setDate(fromDate.getDate() - 7);
+            
+            document.getElementById('to-date').value = toDate.toISOString().slice(0, 16);
+            document.getElementById('from-date').value = fromDate.toISOString().slice(0, 16);
+            
+            // Fetch data on page load
+            fetchAndVisualizeData();
+            
+            // Add filter button click event
+            document.getElementById('apply-filters').addEventListener('click', fetchAndVisualizeData);
+            
+            function fetchAndVisualizeData() {
+                const filters = getFilters();
+                const queryParams = new URLSearchParams();
+                
+                if (filters.service) queryParams.append('service', filters.service);
+                if (filters.event) queryParams.append('event', filters.event);
+                if (filters.path) queryParams.append('path', filters.path);
+                if (filters.fromDate) queryParams.append('from', filters.fromDate);
+                if (filters.toDate) queryParams.append('to', filters.toDate);
+                
+                const url = `${API_BASE_URL}/api?${queryParams.toString()}`;
+                
+                // Show loading indicator
+                document.getElementById('loading-indicator').style.display = 'block';
+                document.getElementById('error-message').style.display = 'none';
+                
+                fetch(url)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch analytics data');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        visualizeData(data);
+                        populateTable(data);
+                        document.getElementById('loading-indicator').style.display = 'none';
+                    })
+                    .catch(error => {
+                        console.error('Error fetching data:', error);
+                        document.getElementById('error-message').textContent = error.message;
+                        document.getElementById('error-message').style.display = 'block';
+                        document.getElementById('loading-indicator').style.display = 'none';
+                    });
+            }
+            
+            function getFilters() {
+                const fromDateInput = document.getElementById('from-date').value;
+                const toDateInput = document.getElementById('to-date').value;
+                
+                return {
+                    service: document.getElementById('service').value.trim(),
+                    event: document.getElementById('event').value.trim(),
+                    path: document.getElementById('path').value.trim(),
+                    fromDate: fromDateInput ? new Date(fromDateInput).toISOString() : null,
+                    toDate: toDateInput ? new Date(toDateInput).toISOString() : null
+                };
+            }
+            
+            function visualizeData(events) {
+                // Destroy existing charts to prevent duplicates
+                Object.values(charts).forEach(chart => {
+                    if (chart) chart.destroy();
+                });
+                
+                if (events.length === 0) {
+                    document.getElementById('error-message').textContent = 'No data found for the selected filters';
+                    document.getElementById('error-message').style.display = 'block';
+                    return;
+                }
+                
+                createEventsOverTimeChart(events);
+                createEventsByPathChart(events);
+                createEventsByDeviceChart(events);
+                createEventsByBrowserChart(events);
+            }
+            
+            function createEventsOverTimeChart(events) {
+                // Group events by day
+                const eventsByDay = {};
+                events.forEach(event => {
+                    const date = moment(event.timestamp).format('YYYY-MM-DD');
+                    eventsByDay[date] = (eventsByDay[date] || 0) + 1;
+                });
+                
+                // Sort dates
+                const sortedDates = Object.keys(eventsByDay).sort();
+                
+                const ctx = document.getElementById('events-over-time').getContext('2d');
+                charts.eventsOverTime = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: sortedDates,
+                        datasets: [{
+                            label: 'Number of Events',
+                            data: sortedDates.map(date => eventsByDay[date]),
+                            borderColor: '#4299e1',
+                            backgroundColor: 'rgba(66, 153, 225, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function createEventsByPathChart(events) {
+                // Group events by path
+                const eventsByPath = {};
+                events.forEach(event => {
+                    // Extract the main path component
+                    let path = event.path.split('?')[0];
+                    // Truncate long paths
+                    path = path.length > 30 ? path.substring(0, 27) + '...' : path;
+                    eventsByPath[path] = (eventsByPath[path] || 0) + 1;
+                });
+                
+                // Sort paths by event count (descending) and take top 10
+                const sortedPaths = Object.keys(eventsByPath)
+                    .sort((a, b) => eventsByPath[b] - eventsByPath[a])
+                    .slice(0, 10);
+                
+                const ctx = document.getElementById('events-by-path').getContext('2d');
+                charts.eventsByPath = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedPaths,
+                        datasets: [{
+                            label: 'Number of Events',
+                            data: sortedPaths.map(path => eventsByPath[path]),
+                            backgroundColor: 'rgba(72, 187, 120, 0.7)',
+                            borderColor: 'rgba(72, 187, 120, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function createEventsByDeviceChart(events) {
+                // Group events by device
+                const eventsByDevice = {};
+                events.forEach(event => {
+                    const device = event.user_device || 'Unknown';
+                    eventsByDevice[device] = (eventsByDevice[device] || 0) + 1;
+                });
+                
+                const devices = Object.keys(eventsByDevice);
+                const counts = devices.map(device => eventsByDevice[device]);
+                
+                const ctx = document.getElementById('events-by-device').getContext('2d');
+                charts.eventsByDevice = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: devices,
+                        datasets: [{
+                            data: counts,
+                            backgroundColor: [
+                                'rgba(66, 153, 225, 0.7)',
+                                'rgba(72, 187, 120, 0.7)',
+                                'rgba(237, 100, 166, 0.7)',
+                                'rgba(246, 173, 85, 0.7)',
+                                'rgba(160, 174, 192, 0.7)',
+                                'rgba(113, 128, 150, 0.7)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true
+                    }
+                });
+            }
+            
+            function createEventsByBrowserChart(events) {
+                // Group events by browser
+                const eventsByBrowser = {};
+                events.forEach(event => {
+                    const browser = event.user_browser || 'Unknown';
+                    const simplifiedBrowser = simplifyBrowserName(browser);
+                    eventsByBrowser[simplifiedBrowser] = (eventsByBrowser[simplifiedBrowser] || 0) + 1;
+                });
+                
+                const browsers = Object.keys(eventsByBrowser);
+                const counts = browsers.map(browser => eventsByBrowser[browser]);
+                
+                const ctx = document.getElementById('events-by-browser').getContext('2d');
+                charts.eventsByBrowser = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: browsers,
+                        datasets: [{
+                            data: counts,
+                            backgroundColor: [
+                                'rgba(237, 100, 166, 0.7)',
+                                'rgba(66, 153, 225, 0.7)',
+                                'rgba(72, 187, 120, 0.7)',
+                                'rgba(246, 173, 85, 0.7)',
+                                'rgba(160, 174, 192, 0.7)',
+                                'rgba(113, 128, 150, 0.7)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true
+                    }
+                });
+            }
+            
+            function simplifyBrowserName(browserString) {
+                if (!browserString) return 'Unknown';
+                
+                const browserMap = {
+                    'chrome': 'Chrome',
+                    'firefox': 'Firefox',
+                    'safari': 'Safari',
+                    'edge': 'Edge',
+                    'opera': 'Opera',
+                    'msie': 'Internet Explorer',
+                    'ie': 'Internet Explorer'
+                };
+                
+                const lowerBrowser = browserString.toLowerCase();
+                for (const [key, value] of Object.entries(browserMap)) {
+                    if (lowerBrowser.includes(key)) {
+                        return value;
+                    }
+                }
+                
+                return browserString.length > 20 
+                    ? browserString.substring(0, 17) + '...' 
+                    : browserString;
+            }
+            
+            function populateTable(events) {
+                const tableBody = document.querySelector('#events-table tbody');
+                tableBody.innerHTML = '';
+                
+                events.slice(0, 100).forEach(event => {
+                    const row = document.createElement('tr');
+                    
+                    const formatTimestamp = timestamp => {
+                        const date = new Date(timestamp);
+                        return date.toLocaleString();
+                    };
+                    
+                    row.innerHTML = `
+                        <td>${formatTimestamp(event.timestamp)}</td>
+                        <td>${escapeHtml(event.service)}</td>
+                        <td>${escapeHtml(event.event)}</td>
+                        <td>${escapeHtml(event.path)}</td>
+                        <td>${escapeHtml(event.user_device || '')}</td>
+                        <td>${escapeHtml(event.user_browser || '')}</td>
+                        <td>${escapeHtml(event.user_location || '')}</td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+                
+                if (events.length > 100) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td colspan="7" style="text-align: center; font-style: italic;">
+                            Showing 100 of ${events.length} events. Apply filters to narrow results.
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                } else if (events.length === 0) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td colspan="7" style="text-align: center; font-style: italic;">
+                            No events found matching the current filters.
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                }
+            }
+            
+            function escapeHtml(str) {
+                if (!str) return '';
+                return str
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+        });
+    </script>
+</body>
+</html>
