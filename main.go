@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -20,6 +21,17 @@ func main() {
 	r.HandleFunc("/api", getEvents).Methods("GET")
 	r.HandleFunc("/api", recordEvent).Methods("POST")
 
+	// Create a CORS middleware handler
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"https://artsy.rashik.sh", "https://www.artsy.rashik.sh"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	})
+
+	// Use the CORS middleware with the router
+	handler := c.Handler(r)
+
 	fmt.Println("Analytics server is running on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }
