@@ -23,7 +23,7 @@ func main() {
 
 	// Create a CORS middleware handler
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"https://artsy.rashik.sh", "https://www.artsy.rashik.sh"},
+		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
