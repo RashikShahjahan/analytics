@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -24,8 +26,32 @@ func getClientIP(r *http.Request) string {
 }
 
 func getLocationFromIP(ip string) string {
-	// In a real application, you would integrate with a geolocation API service
-	// For this example, we'll return a placeholder
-	// TODO: Integrate with a proper geolocation service
-	return "Unknown" // Placeholder for actual location lookup
+	// Look up location via ip-api.com
+	if ip == "" {
+		return "Unknown"
+	}
+	resp, err := http.Get(fmt.Sprintf("http://ip-api.com/json/%s?fields=status,message,country,regionName,city", ip))
+	if err != nil {
+		return "Unknown"
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Status     string `json:"status"`
+		Message    string `json:"message"`
+		Country    string `json:"country"`
+		RegionName string `json:"regionName"`
+		City       string `json:"city"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || result.Status != "success" {
+		return "Unknown"
+	}
+
+	if result.City != "" {
+		return fmt.Sprintf("%s, %s, %s", result.City, result.RegionName, result.Country)
+	}
+	if result.RegionName != "" {
+		return fmt.Sprintf("%s, %s", result.RegionName, result.Country)
+	}
+	return result.Country
 }
