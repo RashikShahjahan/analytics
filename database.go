@@ -81,15 +81,11 @@ func createTablesIfNotExist() error {
 }
 
 func SaveEvent(event EventRecord) error {
-	query := `
-	INSERT INTO events (service, event, path, referrer, user_browser, user_device, timestamp, user_ip, user_location, metadata)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	RETURNING id
-	`
+	var query string
+	var args []interface{}
 
-	var id int
-	err := db.QueryRow(
-		query,
+	// Base params without metadata
+	args = append(args,
 		event.Service,
 		event.Event,
 		event.Path,
@@ -98,11 +94,37 @@ func SaveEvent(event EventRecord) error {
 		event.UserDevice,
 		event.Timestamp,
 		event.UserIP,
-		event.UserLocation,
-		event.Metadata,
-	).Scan(&id)
+		event.UserLocation)
 
-	return err
+	// Different query format based on metadata presence
+	if event.Metadata != nil && len(event.Metadata) > 0 {
+		// Use a text value that will be cast to JSONB by PostgreSQL
+		jsonData, err := json.Marshal(event.Metadata)
+		if err != nil {
+			return fmt.Errorf("failed to marshal metadata: %v", err)
+		}
+
+		query = `
+		INSERT INTO events (service, event, path, referrer, user_browser, user_device, timestamp, user_ip, user_location, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+		RETURNING id
+		`
+		args = append(args, string(jsonData))
+	} else {
+		query = `
+		INSERT INTO events (service, event, path, referrer, user_browser, user_device, timestamp, user_ip, user_location, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL)
+		RETURNING id
+		`
+	}
+
+	var id int
+	err := db.QueryRow(query, args...).Scan(&id)
+	if err != nil {
+		return fmt.Errorf("database insert error: %v", err)
+	}
+
+	return nil
 }
 
 func NewQueryBuilder(baseQuery string) *QueryBuilder {
@@ -200,6 +222,9 @@ func GetEvents(filter EventFilter) ([]EventRecord, error) {
 		var timestamp time.Time
 		var metadataJSON []byte
 
+		// Initialize empty metadata map
+		e.Metadata = make(map[string]interface{})
+
 		err := rows.Scan(
 			&e.Service,
 			&e.Event,
@@ -218,10 +243,12 @@ func GetEvents(filter EventFilter) ([]EventRecord, error) {
 
 		e.Timestamp = timestamp.Format(time.RFC3339Nano)
 
-		// Parse metadata if it exists
-		if metadataJSON != nil {
+		// Parse metadata if it exists and is not null
+		if metadataJSON != nil && len(metadataJSON) > 0 {
 			if err := json.Unmarshal(metadataJSON, &e.Metadata); err != nil {
-				log.Printf("Error unmarshaling metadata: %v", err)
+				log.Printf("Error unmarshaling metadata for event %s: %v", e.Event, err)
+				// Continue with the event even if metadata parsing fails
+				e.Metadata = map[string]interface{}{"error": "Failed to parse metadata"}
 			}
 		}
 
