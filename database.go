@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -67,7 +68,8 @@ func createTablesIfNotExist() error {
 		user_device VARCHAR(200),
 		timestamp TIMESTAMPTZ NOT NULL,
 		user_ip VARCHAR(45),
-		user_location VARCHAR(200)
+		user_location VARCHAR(200),
+		metadata JSONB
 	);
 	CREATE INDEX IF NOT EXISTS idx_events_service ON events(service);
 	CREATE INDEX IF NOT EXISTS idx_events_event ON events(event);
@@ -80,8 +82,8 @@ func createTablesIfNotExist() error {
 
 func SaveEvent(event EventRecord) error {
 	query := `
-	INSERT INTO events (service, event, path, referrer, user_browser, user_device, timestamp, user_ip, user_location)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	INSERT INTO events (service, event, path, referrer, user_browser, user_device, timestamp, user_ip, user_location, metadata)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	RETURNING id
 	`
 
@@ -97,6 +99,7 @@ func SaveEvent(event EventRecord) error {
 		event.Timestamp,
 		event.UserIP,
 		event.UserLocation,
+		event.Metadata,
 	).Scan(&id)
 
 	return err
@@ -176,7 +179,7 @@ func (qb *QueryBuilder) Build(orderBy string, limit int) (string, []interface{})
 
 func GetEvents(filter EventFilter) ([]EventRecord, error) {
 	qb := NewQueryBuilder(`
-		SELECT service, event, path, referrer, user_browser, user_device, timestamp, user_ip, user_location
+		SELECT service, event, path, referrer, user_browser, user_device, timestamp, user_ip, user_location, metadata
 		FROM events
 		WHERE 1=1
 	`)
@@ -195,6 +198,7 @@ func GetEvents(filter EventFilter) ([]EventRecord, error) {
 	for rows.Next() {
 		var e EventRecord
 		var timestamp time.Time
+		var metadataJSON []byte
 
 		err := rows.Scan(
 			&e.Service,
@@ -206,12 +210,21 @@ func GetEvents(filter EventFilter) ([]EventRecord, error) {
 			&timestamp,
 			&e.UserIP,
 			&e.UserLocation,
+			&metadataJSON,
 		)
 		if err != nil {
 			return nil, err
 		}
 
 		e.Timestamp = timestamp.Format(time.RFC3339Nano)
+
+		// Parse metadata if it exists
+		if metadataJSON != nil {
+			if err := json.Unmarshal(metadataJSON, &e.Metadata); err != nil {
+				log.Printf("Error unmarshaling metadata: %v", err)
+			}
+		}
+
 		events = append(events, e)
 	}
 

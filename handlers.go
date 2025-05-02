@@ -44,8 +44,14 @@ func recordEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	event := EventRecord{
-		EventBase: eventReq.EventBase,
-		Timestamp: eventReq.Timestamp,
+		Service:     eventReq.Service,
+		Event:       eventReq.Event,
+		Path:        eventReq.Path,
+		Referrer:    eventReq.Referrer,
+		UserBrowser: eventReq.UserBrowser,
+		UserDevice:  eventReq.UserDevice,
+		Timestamp:   eventReq.Timestamp,
+		Metadata:    eventReq.Metadata,
 	}
 
 	if event.Timestamp == "" {

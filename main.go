@@ -32,6 +32,6 @@ func main() {
 	// Use the CORS middleware with the router
 	handler := c.Handler(r)
 
-	fmt.Println("Analytics server is running on http://localhost:8080")
+	fmt.Println("Analytics server is running")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }
