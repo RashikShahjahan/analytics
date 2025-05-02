@@ -120,6 +120,18 @@
                 width: 100%;
             }
         }
+        .export-btn {
+            background-color: #4a5568;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .export-btn:hover {
+            background-color: #2d3748;
+        }
     </style>
 </head>
 <body>
@@ -139,6 +151,14 @@
             <div class="filter-group">
                 <label for="path">Path</label>
                 <input type="text" id="path" placeholder="All paths">
+            </div>
+            <div class="filter-group">
+                <label for="metadata-key">Metadata Key</label>
+                <input type="text" id="metadata-key" placeholder="Filter by metadata key">
+            </div>
+            <div class="filter-group">
+                <label for="metadata-value">Metadata Value</label>
+                <input type="text" id="metadata-value" placeholder="Filter by metadata value">
             </div>
             <div class="filter-group">
                 <label for="from-date">From Date</label>
@@ -172,9 +192,17 @@
                 <h2>Events by Browser</h2>
                 <canvas id="events-by-browser"></canvas>
             </div>
+            <div class="chart-container">
+                <h2>Common Metadata Keys</h2>
+                <canvas id="common-metadata-keys"></canvas>
+            </div>
         </div>
         
         <h2>Raw Event Data</h2>
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button id="export-json" class="export-btn">Export as JSON</button>
+            <button id="export-csv" class="export-btn">Export as CSV</button>
+        </div>
         <table class="data-table" id="events-table">
             <thead>
                 <tr>
@@ -185,6 +213,7 @@
                     <th>Device</th>
                     <th>Browser</th>
                     <th>Location</th>
+                    <th>Metadata</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -199,7 +228,8 @@
                 eventsOverTime: null,
                 eventsByPath: null,
                 eventsByDevice: null,
-                eventsByBrowser: null
+                eventsByBrowser: null,
+                commonMetadataKeys: null
             };
             
             // Set default date range (last 7 days)
@@ -215,6 +245,13 @@
             
             // Add filter button click event
             document.getElementById('apply-filters').addEventListener('click', fetchAndVisualizeData);
+            
+            // Add export button click events
+            document.getElementById('export-json').addEventListener('click', exportJSON);
+            document.getElementById('export-csv').addEventListener('click', exportCSV);
+            
+            // Store the current events data
+            let currentEvents = [];
             
             function fetchAndVisualizeData() {
                 const filters = getFilters();
@@ -240,8 +277,33 @@
                         return response.json();
                     })
                     .then(data => {
-                        visualizeData(data);
-                        populateTable(data);
+                        // Filter by metadata if specified
+                        const metadataKey = document.getElementById('metadata-key').value.trim();
+                        const metadataValue = document.getElementById('metadata-value').value.trim();
+                        
+                        let filteredData = data;
+                        if (metadataKey || metadataValue) {
+                            filteredData = data.filter(event => {
+                                if (!event.metadata) return false;
+                                
+                                if (metadataKey && metadataValue) {
+                                    return event.metadata[metadataKey] !== undefined && 
+                                           JSON.stringify(event.metadata[metadataKey]).includes(metadataValue);
+                                } else if (metadataKey) {
+                                    return event.metadata[metadataKey] !== undefined;
+                                } else if (metadataValue) {
+                                    return JSON.stringify(event.metadata).includes(metadataValue);
+                                }
+                                
+                                return true;
+                            });
+                        }
+                        
+                        // Store the filtered data for export
+                        currentEvents = filteredData;
+                        
+                        visualizeData(filteredData);
+                        populateTable(filteredData);
                         document.getElementById('loading-indicator').style.display = 'none';
                     })
                     .catch(error => {
@@ -281,6 +343,7 @@
                 createEventsByPathChart(events);
                 createEventsByDeviceChart(events);
                 createEventsByBrowserChart(events);
+                createCommonMetadataKeysChart(events);
             }
             
             function createEventsOverTimeChart(events) {
@@ -461,6 +524,61 @@
                     : browserString;
             }
             
+            function createCommonMetadataKeysChart(events) {
+                // Count occurrences of metadata keys
+                const metadataKeyCounts = {};
+                
+                events.forEach(event => {
+                    if (event.metadata) {
+                        Object.keys(event.metadata).forEach(key => {
+                            metadataKeyCounts[key] = (metadataKeyCounts[key] || 0) + 1;
+                        });
+                    }
+                });
+                
+                // Sort keys by count (descending) and take top 10
+                const sortedKeys = Object.keys(metadataKeyCounts)
+                    .sort((a, b) => metadataKeyCounts[b] - metadataKeyCounts[a])
+                    .slice(0, 10);
+                
+                // If no metadata is found, show a message
+                if (sortedKeys.length === 0) {
+                    const ctx = document.getElementById('common-metadata-keys').getContext('2d');
+                    ctx.font = '14px Arial';
+                    ctx.fillStyle = '#718096';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('No metadata found in the selected events', ctx.canvas.width / 2, ctx.canvas.height / 2);
+                    return;
+                }
+                
+                const ctx = document.getElementById('common-metadata-keys').getContext('2d');
+                charts.commonMetadataKeys = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedKeys,
+                        datasets: [{
+                            label: 'Occurrences',
+                            data: sortedKeys.map(key => metadataKeyCounts[key]),
+                            backgroundColor: 'rgba(129, 140, 248, 0.7)',
+                            borderColor: 'rgba(129, 140, 248, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        indexAxis: 'y',
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
             function populateTable(events) {
                 const tableBody = document.querySelector('#events-table tbody');
                 tableBody.innerHTML = '';
@@ -473,6 +591,17 @@
                         return date.toLocaleString();
                     };
                     
+                    const formatMetadata = metadata => {
+                        if (!metadata) return '';
+                        try {
+                            return JSON.stringify(metadata, null, 2)
+                                .replace(/\n/g, '<br>')
+                                .replace(/\s\s/g, '&nbsp;&nbsp;');
+                        } catch (e) {
+                            return 'Invalid metadata';
+                        }
+                    };
+                    
                     row.innerHTML = `
                         <td>${formatTimestamp(event.timestamp)}</td>
                         <td>${escapeHtml(event.service)}</td>
@@ -481,6 +610,7 @@
                         <td>${escapeHtml(event.user_device || '')}</td>
                         <td>${escapeHtml(event.user_browser || '')}</td>
                         <td>${escapeHtml(event.user_location || '')}</td>
+                        <td><pre style="max-width: 200px; overflow: auto; margin: 0;">${formatMetadata(event.metadata)}</pre></td>
                     `;
                     
                     tableBody.appendChild(row);
@@ -513,6 +643,70 @@
                     .replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;')
                     .replace(/'/g, '&#039;');
+            }
+            
+            function exportJSON() {
+                if (currentEvents.length === 0) {
+                    alert('No data to export');
+                    return;
+                }
+                
+                const dataStr = JSON.stringify(currentEvents, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                
+                const exportFileName = `analytics_export_${new Date().toISOString().split('T')[0]}.json`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileName);
+                linkElement.style.display = 'none';
+                document.body.appendChild(linkElement);
+                linkElement.click();
+                document.body.removeChild(linkElement);
+            }
+            
+            function exportCSV() {
+                if (currentEvents.length === 0) {
+                    alert('No data to export');
+                    return;
+                }
+                
+                // Define CSV columns
+                const columns = [
+                    'timestamp', 'service', 'event', 'path', 'referrer',
+                    'user_device', 'user_browser', 'user_location', 'metadata'
+                ];
+                
+                // Create CSV header row
+                let csvContent = columns.join(',') + '\n';
+                
+                // Add data rows
+                currentEvents.forEach(event => {
+                    const row = columns.map(column => {
+                        if (column === 'metadata') {
+                            // Stringify metadata and escape quotes
+                            return event.metadata ? 
+                                '"' + JSON.stringify(event.metadata).replace(/"/g, '""') + '"' : '';
+                        } else {
+                            // Escape other values if they contain commas or quotes
+                            const value = event[column] || '';
+                            return value.includes(',') || value.includes('"') ? 
+                                '"' + value.replace(/"/g, '""') + '"' : value;
+                        }
+                    });
+                    csvContent += row.join(',') + '\n';
+                });
+                
+                const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+                const exportFileName = `analytics_export_${new Date().toISOString().split('T')[0]}.csv`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileName);
+                linkElement.style.display = 'none';
+                document.body.appendChild(linkElement);
+                linkElement.click();
+                document.body.removeChild(linkElement);
             }
         });
     </script>
