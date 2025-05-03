@@ -87,4 +87,23 @@ const (
 )
 ```
 
-Modify these constants to match your PostgreSQL configuration if needed. 
+Modify these constants to match your PostgreSQL configuration if needed.
+
+## Configuration
+
+### CORS Configuration
+
+By default, the server allows requests from all origins. To restrict access to specific origins, set the `ALLOWED_ORIGINS` environment variable:
+
+```
+# Allow requests from multiple domains
+export ALLOWED_ORIGINS=https://example.com,https://app.example.com
+
+# Or for a single domain
+export ALLOWED_ORIGINS=https://example.com
+```
+
+When running with Docker, you can set the environment variable in your docker-compose file or when running the container:
+
+```
+docker run -e ALLOWED_ORIGINS=https://example.com -p 8080:8080 analytics-server 

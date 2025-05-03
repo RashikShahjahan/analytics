@@ -16,6 +16,10 @@ WORKDIR /app
 
 COPY --from=builder /app/analytics-server .
 
+# The analytics server will be accessible on port 8080
 EXPOSE 8080
+
+# You can override this with -e ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+ENV ALLOWED_ORIGINS="*"
 
 CMD ["./analytics-server"] 
