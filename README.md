@@ -64,6 +64,7 @@ Supported query parameters:
 - `referrer`: Filter by referrer
 - `browser`: Filter by user browser
 - `device`: Filter by user device
+- `location`: Filter by user location
 - `from`: Filter by timestamp (RFC3339Nano format)
 - `to`: Filter by timestamp (RFC3339Nano format)
 

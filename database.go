@@ -159,6 +159,7 @@ func (qb *QueryBuilder) AddFilters(filter EventFilter) *QueryBuilder {
 	qb.AddWhere("referrer", filter.Referrer)
 	qb.AddWhere("user_browser", filter.UserBrowser)
 	qb.AddWhere("user_device", filter.UserDevice)
+	qb.AddWhere("user_location", filter.UserLocation)
 
 	if filter.Path != "" {
 		qb.AddCondition("path", "LIKE", "%"+filter.Path+"%")

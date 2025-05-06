@@ -20,6 +20,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	filter.Referrer = query.Get("referrer")
 	filter.UserBrowser = query.Get("browser")
 	filter.UserDevice = query.Get("device")
+	filter.UserLocation = query.Get("location")
 
 	filter.FromTime = query.Get("from")
 	filter.ToTime = query.Get("to")
