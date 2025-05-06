@@ -101,9 +101,13 @@ export ALLOWED_ORIGINS=https://example.com,https://app.example.com
 
 # Or for a single domain
 export ALLOWED_ORIGINS=https://example.com
+
+# To allow all subdomains of a domain
+export ALLOWED_ORIGINS=https://*.example.com
 ```
 
 When running with Docker, you can set the environment variable in your docker-compose file or when running the container:
 
 ```
-docker run -e ALLOWED_ORIGINS=https://example.com -p 8080:8080 analytics-server 
+docker run -e ALLOWED_ORIGINS=https://*.rashik.sh -p 8080:8080 analytics-server 
+```
